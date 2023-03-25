@@ -1,0 +1,55 @@
+from transformers import TextDataset, DataCollatorForLanguageModeling, GPT2Tokenizer, GPT2LMHeadModel, Trainer, TrainingArguments
+
+def combine_text_files(file_paths, output_file):
+    with open(output_file, 'w') as outfile:
+        for file_path in file_paths:
+            with open(file_path, 'r') as infile:
+                outfile.write(infile.read())
+                outfile.write('\n')
+
+# Step 1: Prepare the dataset
+input_files = [
+    "./data/dm-gpt2-llm/crit-role-dialog.txt",
+    "./data/dm-gpt2-llm/core-rules.txt"
+]
+output_file = "./data/dm-gpt2-llm/combined-text-file.txt"
+cache_dir = "./cache"
+
+
+combine_text_files(input_files, output_file)
+
+tokenizer = GPT2Tokenizer.from_pretrained("gpt2", cache_dir=cache_dir)
+train_dataset = TextDataset(
+    tokenizer=tokenizer,
+    file_path="./data/dm-gpt2-llm/combined-text-file.txt",
+    block_size=128
+)
+
+data_collator = DataCollatorForLanguageModeling(
+    tokenizer=tokenizer, mlm=False,
+)
+
+# Step 2: Set up the GPT-2 model
+model = GPT2LMHeadModel.from_pretrained("gpt2", cache_dir=cache_dir)
+
+# Step 3: Fine-tune the model
+training_args = TrainingArguments(
+    output_dir="./models/dm-gpt2-llm/output",
+    overwrite_output_dir=True,
+    num_train_epochs=3,
+    per_device_train_batch_size=4,
+    save_steps=100,
+    save_total_limit=2,
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    data_collator=data_collator,
+    train_dataset=train_dataset,
+)
+
+trainer.train()
+
+# Step 4: Save the fine-tuned model
+model.save_pretrained("./models/dm-gpt2-llm")

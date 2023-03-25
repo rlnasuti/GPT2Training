@@ -1,0 +1,7 @@
+venv/
+cache/
+models/
+data/
+.DS_Store
+cached_*
+._text*
