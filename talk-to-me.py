@@ -1,7 +1,31 @@
 from transformers import pipeline
-from transformers import TextDataset, DataCollatorForLanguageModeling, GPT2Tokenizer, GPT2LMHeadModel, Trainer, TrainingArguments
+from transformers import TextDataset, AutoModelForTokenClassification, AutoTokenizer, DataCollatorForLanguageModeling, GPT2Tokenizer, GPT2LMHeadModel, Trainer, TrainingArguments
 import warnings
 import logging
+import torch
+
+def convert_ids_to_entities(input_ids, predictions):
+    entities = []
+    current_entity = None
+
+    for token_id, pred in zip(input_ids, predictions):
+        if pred != 0:
+            if current_entity is None:
+                current_entity = {
+                    "start": token_id,
+                    "end": token_id,
+                    "label": ner_model.config.id2label[pred]
+                }
+            else:
+                current_entity["end"] = token_id
+        else:
+            if current_entity is not None:
+                entities.append(current_entity)
+                current_entity = None
+
+    return entities
+
+
 
 warnings.filterwarnings("ignore")
 logging.getLogger("transformers").setLevel(logging.ERROR)
@@ -11,7 +35,10 @@ from transformers import pipeline, GPT2LMHeadModel, GPT2Tokenizer
 cache_dir = "./cache"
 
 # Load the BERT NER model
-ner_model = pipeline("ner", model="dbmdz/bert-large-cased-finetuned-conll03-english")
+# ner_model = pipeline("ner", model="dbmdz/bert-large-cased-finetuned-conll03-english")
+ner_model = AutoModelForTokenClassification.from_pretrained("models/spells-ner")
+ner_tokenizer = AutoTokenizer.from_pretrained("models/spells-ner")
+
 
 # Load the conversation and spell GPT-2 models and tokenizers
 dm_model = GPT2LMHeadModel.from_pretrained('/Users/robertnasuti/Desktop/Dev/GPT2Training/models/dm-gpt2-llm', cache_dir=cache_dir)
@@ -27,7 +54,17 @@ spells_generator = pipeline('text-generation', model=spells_model, tokenizer=spe
 # Function to generate a response using the GPT-2 models
 def generate_response(prompt, max_length=100):
     # Detect named entities using the BERT NER model
-    entities = ner_model(prompt)
+    ner_input = ner_tokenizer(prompt, return_tensors="pt")
+
+    with torch.no_grad():
+        output = ner_model(**ner_input)
+
+    # Process the output tensor to obtain the entity information
+    predictions = torch.argmax(output.logits, dim=2)
+    input_ids = ner_input["input_ids"].numpy()[0]
+    predictions = predictions[0].numpy()
+
+    entities = convert_ids_to_entities(input_ids, predictions)
 
     # Identify if there's any entity related to a spell
     spell_entity = None

@@ -6,7 +6,7 @@ cache_dir = "./cache"
 tokenizer = GPT2Tokenizer.from_pretrained("gpt2", cache_dir=cache_dir)
 train_dataset = TextDataset(
     tokenizer=tokenizer,
-    file_path="./data/spells-gpt2-llm/spells-data.txt",
+    file_path="./data/spells-gpt2-llm/spells.txt",
     block_size=128,
 )
 
